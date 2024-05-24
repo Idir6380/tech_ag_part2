@@ -13,20 +13,75 @@ import java.util.Map;
 
 public class BuyerAgent extends Agent implements Serializable {
 
+    private enum Critere {
+        PRIX("prix", -1), // À minimiser
+        QUALITE("qualite", 1), // À maximiser
+        COUT_LIVRAISON("coutLivraison", -1); // À minimiser
+
+        private String nom;
+        private int direction; // 1 pour maximiser, -1 pour minimiser
+
+        Critere(String nom, int direction) {
+            this.nom = nom;
+            this.direction = direction;
+        }
+
+        public String getNom() {
+            return nom;
+        }
+
+        public int getDirection() {
+            return direction;
+        }
+    }
+    private enum Preference {
+        PRIX("prix", 0.4, -1), // À minimiser
+        QUALITE("qualite", 0.4, 1), // À maximiser
+        COUT_LIVRAISON("coutLivraison", 0.2, -1); // À minimiser
+
+        private String nom;
+        private double valeur;
+        private int direction; // 1 pour maximiser, -1 pour minimiser
+
+        Preference(String nom, double valeur, int direction) {
+            this.nom = nom;
+            this.valeur = valeur;
+            this.direction = direction;
+        }
+
+        public String getNom() {
+            return nom;
+        }
+
+        public double getValeur() {
+            return valeur;
+        }
+
+        public int getDirection() {
+            return direction;
+        }
+    }
+
     // Critères et préférences de l'acheteur
     private Map<String, Double> criteria = new HashMap<>();
     private Map<String, Double> preferences = new HashMap<>();
 
     protected void setup() {
         // Initialisation des critères et préférences
-        criteria.put("prix", 100.0);
+        /*criteria.put("prix", 100.0);
         criteria.put("qualite", 8.0);
-        criteria.put("coutLivraison", 20.0);
+        criteria.put("coutLivraison", 20.0);*/
+        for (Critere critere : Critere.values()) {
+            criteria.put(critere.getNom(), critere.getDirection() * 100.0); // Valeur de démonstration
+        }
 
-        preferences.put("prix", 0.4); // À minimiser
+        /*preferences.put("prix", 0.4); // À minimiser
         preferences.put("qualite", 0.4); // À maximiser
         preferences.put("coutLivraison", 0.2); // À minimiser
-
+        */
+        for (Preference preference : Preference.values()) {
+            preferences.put(preference.getNom(), preference.getValeur());
+        }
         // Enregistrement auprès du DF
         registerWithDF();
 
@@ -85,11 +140,11 @@ public class BuyerAgent extends Agent implements Serializable {
         for (Map.Entry<String, Double> entry : offer.entrySet()) {
             String critere = entry.getKey();
             double valeur = entry.getValue();
-            double preference = preferences.get(critere);
-            if (preference < 0) {
-                score += preference * (criteria.get(critere) - valeur);
+            Preference preference = Preference.valueOf(critere.toUpperCase());
+            if (preference.getDirection() < 0) {
+                score += preference.getValeur() * (criteria.get(critere) - valeur);
             } else {
-                score += preference * valeur;
+                score += preference.getValeur() * valeur;
             }
         }
         return score;
