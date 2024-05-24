@@ -1,13 +1,15 @@
 import jade.core.Agent;
 import jade.core.behaviours.TickerBehaviour;
+import jade.core.behaviours.CyclicBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.domain.FIPAException;
 import jade.lang.acl.ACLMessage;
-import jade.core.mobility.*;
+import jade.lang.acl.MessageTemplate;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -68,17 +70,10 @@ public class BuyerAgent extends Agent implements Serializable {
 
     protected void setup() {
         // Initialisation des critères et préférences
-        /*criteria.put("prix", 100.0);
-        criteria.put("qualite", 8.0);
-        criteria.put("coutLivraison", 20.0);*/
         for (Critere critere : Critere.values()) {
             criteria.put(critere.getNom(), critere.getDirection() * 100.0); // Valeur de démonstration
         }
 
-        /*preferences.put("prix", 0.4); // À minimiser
-        preferences.put("qualite", 0.4); // À maximiser
-        preferences.put("coutLivraison", 0.2); // À minimiser
-        */
         for (Preference preference : Preference.values()) {
             preferences.put(preference.getNom(), preference.getValeur());
         }
@@ -86,10 +81,30 @@ public class BuyerAgent extends Agent implements Serializable {
         registerWithDF();
 
         // Comportement périodique pour envoyer les demandes d'offre
-        addBehaviour(new TickerBehaviour(this, 10000) {
+        addBehaviour(new TickerBehaviour(this, 10000) { // Période de 10 secondes
             @Override
             protected void onTick() {
                 sendRequestForProposals();
+
+                // Attendre les réponses des vendeurs
+                final MessageTemplate proposalTemplate = MessageTemplate.MatchPerformative(ACLMessage.PROPOSE);
+                addBehaviour(new CyclicBehaviour(BuyerAgent.this) {
+                    ArrayList<ACLMessage> repliesReceived = new ArrayList<>();
+
+                    public void action() {
+                        ACLMessage reply = receive(proposalTemplate);
+                        if (reply != null) {
+                            repliesReceived.add(reply);
+                            // Si toutes les réponses attendues sont reçues, traiter les réponses
+                            if (repliesReceived.size() == getVendorsCount()) {
+                                processReplies(repliesReceived);
+                                removeBehaviour(this); // Supprimer ce comportement une fois terminé
+                            }
+                        } else {
+                            block(); // Bloquer jusqu'à ce qu'un message soit reçu
+                        }
+                    }
+                });
             }
         });
 
@@ -135,6 +150,43 @@ public class BuyerAgent extends Agent implements Serializable {
         }
     }
 
+    private int getVendorsCount() {
+        // Obtenir la liste des agents vendeurs à partir du DF
+        DFAgentDescription template = new DFAgentDescription();
+        ServiceDescription sd = new ServiceDescription();
+        sd.setType("vendeur");
+        template.addServices(sd);
+        try {
+            DFAgentDescription[] result = DFService.search(this, template);
+            return result.length; // Retourne le nombre de vendeurs trouvés
+        } catch (FIPAException fe) {
+            fe.printStackTrace();
+            return 0; // En cas d'erreur, retourner 0
+        }
+    }
+
+    private void processReplies(ArrayList<ACLMessage> repliesReceived) {
+        // Évaluer les offres reçues et sélectionner la meilleure
+        Map<String, Double> bestOffer = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
+        for (ACLMessage reply : repliesReceived) {
+            Map<String, Double> offer = extractOfferFromMessage(reply);
+            double score = evaluateOffer(offer);
+            if (score > bestScore) {
+                bestScore = score;
+                bestOffer = offer;
+            }
+        }
+
+        // Accepter la meilleure offre
+        if (bestOffer != null) {
+            ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
+            accept.setContent(bestOffer.toString());
+            accept.addReceiver(repliesReceived.get(0).getSender()); // Utilise le premier vendeur
+            send(accept);
+        }
+    }
+
     private double evaluateOffer(Map<String, Double> offer) {
         double score = 0.0;
         for (Map.Entry<String, Double> entry : offer.entrySet()) {
@@ -148,6 +200,21 @@ public class BuyerAgent extends Agent implements Serializable {
             }
         }
         return score;
+    }
+
+    private Map<String, Double> extractOfferFromMessage(ACLMessage msg) {
+        Map<String, Double> offer = new HashMap<>();
+        String content = msg.getContent();
+        String[] parts = content.split(";");
+        for (String part : parts) {
+            String[] kvp = part.split("=");
+            if (kvp.length == 2) {
+                String key = kvp[0].trim();
+                double value = Double.parseDouble(kvp[1].trim());
+                offer.put(key, value);
+            }
+        }
+        return offer;
     }
 
     // Autres méthodes pour la migration de l'agent
