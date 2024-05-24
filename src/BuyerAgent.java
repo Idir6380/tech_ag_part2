@@ -1,4 +1,7 @@
 import jade.core.Agent;
+import jade.core.ContainerID;
+import jade.core.Location;
+import jade.core.behaviours.OneShotBehaviour;
 import jade.core.behaviours.TickerBehaviour;
 import jade.core.behaviours.CyclicBehaviour;
 import jade.domain.DFService;
@@ -7,6 +10,7 @@ import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.domain.FIPAException;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
+import jade.mtp.TransportAddress;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -36,6 +40,7 @@ public class BuyerAgent extends Agent implements Serializable {
             return direction;
         }
     }
+
     private enum Preference {
         PRIX("prix", 0.4, -1), // À minimiser
         QUALITE("qualite", 0.4, 1), // À maximiser
@@ -109,6 +114,31 @@ public class BuyerAgent extends Agent implements Serializable {
         });
 
         System.out.println("L'agent acheteur " + getAID().getName() + " est prêt.");
+
+        //migration inter-conteneur
+        addBehaviour(new OneShotBehaviour() {
+            @Override
+            public void action() {
+                ContainerID destination = new ContainerID("Container-2", null); // Remplacez "Container-2" par le nom de votre conteneur cible
+                doMove(destination);
+            }
+        });
+
+        // inter plateforme
+        // Inter plateforme (clonage)
+       /* addBehaviour(new OneShotBehaviour() {
+            @Override
+            public void action() {
+                try {
+                    // Define the transport address for the destination platform
+                    jade.mtp.TransportAddress destinationAddress = new jade.mtp.http.HTTPMTP().createAddress("http://IP_ADDRESS_OF_DESTINATION_PLATFORM:PORT/acc");
+                    ContainerID destination = new ContainerID("Main-Container", destinationAddress);
+                    doClone(destination, "BuyerAgentClone");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });*/
     }
 
     protected void takeDown() {
@@ -169,20 +199,22 @@ public class BuyerAgent extends Agent implements Serializable {
         // Évaluer les offres reçues et sélectionner la meilleure
         Map<String, Double> bestOffer = null;
         double bestScore = Double.NEGATIVE_INFINITY;
+        ACLMessage bestReply = null;
         for (ACLMessage reply : repliesReceived) {
             Map<String, Double> offer = extractOfferFromMessage(reply);
             double score = evaluateOffer(offer);
             if (score > bestScore) {
                 bestScore = score;
                 bestOffer = offer;
+                bestReply = reply;
             }
         }
 
         // Accepter la meilleure offre
-        if (bestOffer != null) {
+        if (bestOffer != null && bestReply != null) {
             ACLMessage accept = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
             accept.setContent(bestOffer.toString());
-            accept.addReceiver(repliesReceived.get(0).getSender()); // Utilise le premier vendeur
+            accept.addReceiver(bestReply.getSender()); // Utilise le vendeur de la meilleure offre
             send(accept);
         }
     }
@@ -192,11 +224,13 @@ public class BuyerAgent extends Agent implements Serializable {
         for (Map.Entry<String, Double> entry : offer.entrySet()) {
             String critere = entry.getKey();
             double valeur = entry.getValue();
-            Preference preference = Preference.valueOf(critere.toUpperCase());
-            if (preference.getDirection() < 0) {
-                score += preference.getValeur() * (criteria.get(critere) - valeur);
-            } else {
-                score += preference.getValeur() * valeur;
+            if (preferences.containsKey(critere)) {
+                Preference preference = Preference.valueOf(critere.toUpperCase());
+                if (preference.getDirection() < 0) {
+                    score += preference.getValeur() * (criteria.get(critere) - valeur);
+                } else {
+                    score += preference.getValeur() * valeur;
+                }
             }
         }
         return score;
