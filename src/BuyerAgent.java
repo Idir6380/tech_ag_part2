@@ -225,8 +225,7 @@ public class BuyerAgent extends Agent implements Serializable {
             String critere = entry.getKey();
             double valeur = entry.getValue();
             if (preferences.containsKey(critere)) {
-                Preference preference = Preference.valueOf(critere.toUpperCase().replace(" ", "_"));
-                if (preference.getDirection() < 0) {
+                Preference preference = Preference.valueOf(critere.toUpperCase().replace(" ", "_").replace("COUTLIVRAISON", "COUT_LIVRAISON"));                if (preference.getDirection() < 0) {
                     score += preference.getValeur() * (criteria.get(critere) - valeur);
                 } else {
                     score += preference.getValeur() * valeur;

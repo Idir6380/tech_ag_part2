@@ -3,6 +3,7 @@ import jade.core.ProfileImpl;
 import jade.core.Runtime;
 import jade.wrapper.AgentContainer;
 import jade.wrapper.AgentController;
+import jade.wrapper.ContainerController;
 import jade.wrapper.StaleProxyException;
 
 import java.util.HashMap;
@@ -12,10 +13,21 @@ public class Main {
     public static void main(String[] args) {
         // Démarrage de la plateforme JADE
         Runtime rt = Runtime.instance();
-        Profile p = new ProfileImpl();
-        AgentContainer mainContainer = rt.createMainContainer(p);
+
+        // Conteneur principal
+        ProfileImpl mainProfile = new ProfileImpl();
+        mainProfile.setParameter(Profile.GUI, "true");
+        mainProfile.setParameter(Profile.LOCAL_HOST, "localhost");
+        mainProfile.setParameter(Profile.LOCAL_PORT, "1099");
+        mainProfile.setParameter(Profile.CONTAINER_NAME, "MainContainer");
+        AgentContainer mainContainer = rt.createMainContainer(mainProfile);
 
         try {
+            // Créer les conteneurs pour les agents vendeurs
+            ContainerController sellerContainer1 = rt.createAgentContainer(new ProfileImpl(null, 1099, null, true));
+            ContainerController sellerContainer2 = rt.createAgentContainer(new ProfileImpl(null, 1099, null, true));
+            ContainerController sellerContainer3 = rt.createAgentContainer(new ProfileImpl(null, 1099, null, true));
+
             // Lancer les agents vendeurs
             Map<String, Double> productDetails1 = new HashMap<>();
             productDetails1.put("prix", 150.0);
@@ -32,9 +44,9 @@ public class Main {
             productDetails3.put("qualite", 85.0);
             productDetails3.put("coutLivraison", 10.0);
 
-            AgentController seller1 = mainContainer.createNewAgent("Seller1", SellerAgent.class.getName(), new Object[]{productDetails1});
-            AgentController seller2 = mainContainer.createNewAgent("Seller2", SellerAgent.class.getName(), new Object[]{productDetails2});
-            AgentController seller3 = mainContainer.createNewAgent("Seller3", SellerAgent.class.getName(), new Object[]{productDetails3});
+            AgentController seller1 = sellerContainer1.createNewAgent("Seller1", SellerAgent.class.getName(), new Object[]{productDetails1});
+            AgentController seller2 = sellerContainer2.createNewAgent("Seller2", SellerAgent.class.getName(), new Object[]{productDetails2});
+            AgentController seller3 = sellerContainer3.createNewAgent("Seller3", SellerAgent.class.getName(), new Object[]{productDetails3});
 
             seller1.start();
             seller2.start();
