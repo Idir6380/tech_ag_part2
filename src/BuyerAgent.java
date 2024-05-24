@@ -225,7 +225,7 @@ public class BuyerAgent extends Agent implements Serializable {
             String critere = entry.getKey();
             double valeur = entry.getValue();
             if (preferences.containsKey(critere)) {
-                Preference preference = Preference.valueOf(critere.toUpperCase());
+                Preference preference = Preference.valueOf(critere.toUpperCase().replace(" ", "_"));
                 if (preference.getDirection() < 0) {
                     score += preference.getValeur() * (criteria.get(critere) - valeur);
                 } else {
@@ -243,14 +243,9 @@ public class BuyerAgent extends Agent implements Serializable {
         for (String part : parts) {
             String[] kvp = part.split("=");
             if (kvp.length == 2) {
-                String key = kvp[0].trim();
-                double value = Double.parseDouble(kvp[1].trim());
-                offer.put(key, value);
+                offer.put(kvp[0], Double.parseDouble(kvp[1]));
             }
         }
         return offer;
     }
-
-    // Autres méthodes pour la migration de l'agent
-    // ...
 }
